@@ -26,8 +26,6 @@ class FieldExtractor:
         os.environ["GOOGLE_API_KEY"] = api_key
         self.loader = PyPDFLoader(pdf_path)
         self.docs = self.loader.load()
-
-        # Split into chunks
         self.text_splitter = RecursiveCharacterTextSplitter(
             chunk_size=100,
             chunk_overlap=20,
@@ -35,21 +33,16 @@ class FieldExtractor:
         )
         self.all_splits = self.text_splitter.split_documents(self.docs)
 
-        # Load embeddings and vectorstore
         self.embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
         self.vectorstore = FAISS.from_documents(self.all_splits, self.embeddings)
         self.retriever = self.vectorstore.as_retriever(search_kwargs={"k": 5})
-
-        # Load Excel with fields
         self.fields_df = pd.read_excel(excel_path)
 
-        # Prepare LLM
         self.llm = ChatGoogleGenerativeAI(
             model="gemini-2.5-flash",
             temperature=0
         )
 
-        # Prepare prompt
         system_message = (
             "You are an assistant that extracts structured information from text. "
             "Return strictly in csv format like first row field names separated by '|' and next row values separated by '|'. "
@@ -64,7 +57,7 @@ class FieldExtractor:
 
     def retrieve_context(self, field_name: str, field_desc: str) -> str:
         query = f"Provide context for the field: {field_name} ({field_desc})"
-        retrieved_docs = self.vectorstore.similarity_search(query, k=3)
+        retrieved_docs = self.vectorstore.similarity_search(query, k=6)
         context_text = "\n".join([doc.page_content for doc in retrieved_docs])
         return context_text
 
@@ -85,7 +78,6 @@ class FieldExtractor:
         print(response)
         result = response.content
 
-        # Convert CSV-style string to DataFrame
         lines = result.strip().split("\n")
         df = pd.DataFrame([line.split("|") for line in lines[1:]], columns=lines[0].split("|"))
         return df
