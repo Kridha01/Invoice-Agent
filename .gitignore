@@ -1,0 +1,24 @@
+# Python
+__pycache__/
+*.pyc
+
+# Virtual environments
+env/
+venv/
+.venv/
+anaconda3/
+envs/
+
+# Streamlit
+.streamlit/
+
+# Environment variables
+.env
+
+# Temp / runtime
+temp/
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
