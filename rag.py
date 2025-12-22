@@ -85,7 +85,7 @@ class FieldExtractor:
         fields_text = self.prepare_fields_text(feedback)
         chain = self.prompt | self.llm
         response = chain.invoke({"fields_text": fields_text})
-        print(response)
+        # print(response)
         result = response.content
 
         lines = result.strip().split("\n")

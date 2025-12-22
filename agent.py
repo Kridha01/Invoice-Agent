@@ -1,7 +1,7 @@
 import pandas as pd
+import json
 from typing import Dict, Optional, List
 from pydantic import BaseModel, Field
-
 from langgraph.graph import StateGraph, END
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_google_genai import ChatGoogleGenerativeAI
@@ -67,7 +67,7 @@ class AgentState(BaseModel):
     excel_path: str
     gt_map: Dict[str, str]
     iteration: int = 0
-    max_iterations: int = 0
+    max_iterations: int = 1
     threshold: float = 97.0
     current_df: Optional[pd.DataFrame] = None
     best_df: Optional[pd.DataFrame] = None
@@ -80,16 +80,17 @@ class AgentState(BaseModel):
 
 def extract_node(state: AgentState) -> AgentState:
     df = state.extractor.extract_fields() 
-    print("*"*20)
-    print(df)
+    # print("*"*20)
+    # print(df)
     state.current_df = df
+    state.best_df=df
     return state
 
 def evaluate_node(state: AgentState) -> AgentState:
     score, feedback = evaluate_df(state.current_df, state.gt_map)
 
     state.score = score
-    print(f"score for iteratin {state.iteration},{state.score}")
+    # print(f"score for iteratin {state.iteration},{state.score}")
     state.feedback = feedback
     if score > state.best_score:
         state.best_score = score
@@ -100,8 +101,8 @@ def evaluate_node(state: AgentState) -> AgentState:
 def optimize_node(state: AgentState) -> AgentState:
    
     chain,judge_parser = get_judge_chain()
-    print("chain", chain)
-    print("parser",judge_parser)
+    # print("chain", chain)
+    # print("parser",judge_parser)
     fields = list(state.current_df.columns)
     extracted = state.current_df.iloc[0].to_dict()
     ground_truth = state.gt_map  
@@ -111,12 +112,12 @@ def optimize_node(state: AgentState) -> AgentState:
         "ground_truth": ground_truth,
         "format_instructions": judge_parser.get_format_instructions()
     })
-    print("Judge Result")
-    print(judge_result)
+    # print("Judge Result")
+    # print(judge_result)
     state.feedback = judge_result.feedback
     state.iteration += 1
-    print("state iteration",state.iteration)
-    print("feedback",state.feedback)
+    # print("state iteration",state.iteration)
+    # print("feedback",state.feedback)
     return state
 
 
@@ -129,6 +130,7 @@ def route_after_evaluation(state: AgentState):
 
 def final_node(state: AgentState):
     state.current_df = state.best_df
+    # print(state.best_df)
     return state
 
 def build_graph():
@@ -169,22 +171,20 @@ def run_agent(pdf_path, excel_path):
         gt_map=gt_map
     )
 
-    final_state = graph.invoke(state)  
-    print("^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^")
+    final_state = graph.invoke(state)
+
+    # print("^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^")
     print(final_state)
-    print("&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&")
-    final_df = final_state.best_df
-    # print(final_df)
-    return final_df
+    # print("&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&")
+    # print("final_df")
+    # print(final_state['best_df'])
+    return final_state['best_df']
 
 
-if __name__ == "__main__":
-    pdf_path = "sample-invoice.pdf"   
-    excel_path = "fields.xlsx"        
-    final_df = run_agent(pdf_path, excel_path)
-
-    print("Final extracted DataFrame:")
-    print(final_df)
-
-    # final_df.to_excel("final_output.xlsx", index=False)
-    # print("Saved final output to final_output.xlsx")
+# if __name__ == "__main__":
+#     pdf_path = "sample-invoice.pdf"   
+#     excel_path = "fields.xlsx"        
+#     final_df = run_agent(pdf_path, excel_path)
+    
+#     final_df.to_excel("final_output.xlsx", index=False)
+#     print("Saved final output to final_output.xlsx")
