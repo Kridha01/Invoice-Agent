@@ -3,7 +3,7 @@ from dotenv import load_dotenv
 load_dotenv()
 import json
 import pandas as pd
-from typing import List
+from typing import List,Dict,DefaultDict
 
 from pydantic import BaseModel, Field
 from langchain_core.documents import Document
@@ -61,18 +61,28 @@ class FieldExtractor:
         context_text = "\n".join([doc.page_content for doc in retrieved_docs])
         return context_text
 
-    def prepare_fields_text(self) -> str:
+    def prepare_fields_text(self, feedback: Dict[str, str] | None = None) -> str:
         all_fields_text = ""
         for _, row in self.fields_df.iterrows():
-            field_name = row['Field Name']
-            field_desc = row['Description']
+            field_name = row["Field Name"]
+            field_desc = row["Description"]
             context_text = self.retrieve_context(field_name, field_desc)
-            all_fields_text += f"Field: {field_name} - It is {field_desc}\nContext:\n{context_text}\n\n"
-        print(all_fields_text[:1000])
+
+            field_feedback = ""
+            if feedback and field_name in feedback:
+                field_feedback = f"\nFeedback from previous evaluation: {feedback[field_name]}"
+
+            all_fields_text += (
+                f"Field: {field_name}\n"
+                f"Description: {field_desc}"
+                f"{field_feedback}\n"
+                f"Context:\n{context_text}\n\n"
+            )
+
         return all_fields_text
 
-    def extract_fields(self) -> pd.DataFrame:
-        fields_text = self.prepare_fields_text()
+    def extract_fields(self,feedback: Dict[str, str] | None = None) -> pd.DataFrame:
+        fields_text = self.prepare_fields_text(feedback)
         chain = self.prompt | self.llm
         response = chain.invoke({"fields_text": fields_text})
         print(response)
@@ -81,6 +91,13 @@ class FieldExtractor:
         lines = result.strip().split("\n")
         df = pd.DataFrame([line.split("|") for line in lines[1:]], columns=lines[0].split("|"))
         return df
+
+    def get_ground_truth_map(self) -> dict:
+        gt_map = {}
+        for _, row in self.fields_df.iterrows():
+            if "GT" in row and not pd.isna(row["GT"]):
+                gt_map[row["Field Name"]] = str(row["GT"]).strip()
+        return gt_map
 
     def save_to_excel(self, df: pd.DataFrame, output_path: str = "extracted_fields.xlsx"):
         df.to_excel(output_path, index=False)
