@@ -27,12 +27,13 @@ class FieldExtractor:
         self.loader = PyPDFLoader(pdf_path)
         self.docs = self.loader.load()
         self.text_splitter = RecursiveCharacterTextSplitter(
-            chunk_size=100,
-            chunk_overlap=20,
+            chunk_size=150,
+            chunk_overlap=30,
             add_start_index=True
         )
         self.all_splits = self.text_splitter.split_documents(self.docs)
-
+        # print("splits")
+        # print(self.all_splits)
         self.embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
         self.vectorstore = FAISS.from_documents(self.all_splits, self.embeddings)
         self.retriever = self.vectorstore.as_retriever(search_kwargs={"k": 5})
@@ -45,7 +46,7 @@ class FieldExtractor:
 
         system_message = (
             "You are an assistant that extracts structured information from text. "
-            "Return strictly in csv format like first row field names separated by '|' and next row values separated by '|'. "
+            "Return strictly in csv format like first row field names separated by '|' and next row values separated by '|'. if the column numbers are 8 then delimitor of '|' must be 7 only do not add a trailing delimitor if no value present."
             "Example:\npolicy|address|state|pin|gst number|amount|net profit\n1233|asb damoadr nagar|UP|208027|234N5|98.00|12.00"
         )
         human_prompt_template = "{fields_text}"
@@ -78,19 +79,36 @@ class FieldExtractor:
                 f"{field_feedback}\n"
                 f"Context:\n{context_text}\n\n"
             )
-
+        # print(all_fields_text)
         return all_fields_text
 
-    def extract_fields(self,feedback: Dict[str, str] | None = None) -> pd.DataFrame:
+    def extract_fields(self, feedback: Dict[str, str] | None = None) -> pd.DataFrame:
         fields_text = self.prepare_fields_text(feedback)
         chain = self.prompt | self.llm
         response = chain.invoke({"fields_text": fields_text})
-        # print(response)
-        result = response.content
 
-        lines = result.strip().split("\n")
-        df = pd.DataFrame([line.split("|") for line in lines[1:]], columns=lines[0].split("|"))
+        result = response.content.strip()
+        print(result)
+
+        lines = [line for line in result.split("\n") if line.strip()]
+
+        headers = [h.strip() for h in lines[0].split("|")]
+        num_cols = len(headers)
+
+        rows = []
+        for line in lines[1:]:
+            cols = [c.strip() for c in line.split("|")]
+
+            if len(cols) > num_cols:
+                cols = cols[:num_cols]
+            elif len(cols) < num_cols:
+                cols += [""] * (num_cols - len(cols))
+
+            rows.append(cols)
+
+        df = pd.DataFrame(rows, columns=headers)
         return df
+
 
     def get_ground_truth_map(self) -> dict:
         gt_map = {}
@@ -103,4 +121,9 @@ class FieldExtractor:
         df.to_excel(output_path, index=False)
         print(f"Excel file saved successfully at {output_path}")
 
-
+# if __name__=="__main__":
+#     pdf_path='acd.pdf'
+#     excel_path='fields.xlsx'
+#     extractor = FieldExtractor(pdf_path, excel_path, '')
+#     df = extractor.extract_fields()
+#     extractor.save_to_excel(df)

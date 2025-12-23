@@ -100,18 +100,36 @@ def evaluate_node(state: AgentState) -> AgentState:
 
 def optimize_node(state: AgentState) -> AgentState:
    
-    chain,judge_parser = get_judge_chain()
+    # chain,judge_parser = get_judge_chain()
     # print("chain", chain)
     # print("parser",judge_parser)
     fields = list(state.current_df.columns)
     extracted = state.current_df.iloc[0].to_dict()
     ground_truth = state.gt_map  
-    judge_result: JudgeFeedback = chain.invoke({
+
+    judge_chain, judge_parser = get_judge_chain()
+
+    messages = judge_chain.first.format_messages(
+        fields=fields,
+        extracted=extracted,
+        ground_truth=ground_truth,
+        format_instructions=judge_parser.get_format_instructions()
+    )
+    # print(messages)
+    # print("\n====== FINAL PROMPT SENT TO LLM ======\n")
+    
+    # for msg in messages:
+    #     print(f"[{msg.type.upper()}]")
+    #     print(msg.content)
+    #     print("------------------------------------")
+
+    judge_result: JudgeFeedback = judge_chain.invoke({
         "fields": fields,
         "extracted": extracted,
         "ground_truth": ground_truth,
         "format_instructions": judge_parser.get_format_instructions()
     })
+
     # print("Judge Result")
     # print(judge_result)
     state.feedback = judge_result.feedback
@@ -172,10 +190,8 @@ def run_agent(pdf_path, excel_path):
     )
 
     final_state = graph.invoke(state)
-
-    # print("^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^")
     print(final_state)
-    # print("&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&")
+
     # print("final_df")
     # print(final_state['best_df'])
     return final_state['best_df']
